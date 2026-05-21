@@ -205,11 +205,11 @@ After copying, you can SSH in and run `docker compose up -d --build` on the serv
 - Check `docker compose ps` and `docker compose logs` on the server for container-level failures.
 
 **Screenshots (placeholders)**
-- Add a pipeline run screenshot here: `docs/screenshots/actions-run.png`
-- Add Grafana panels under `docs/screenshots/grafana-*.png`
-- Add an example of the rolling deploy logs: `docs/screenshots/deploy-logs.png`
+<img width="825" height="458" alt="Screenshot from 2026-05-21 20-49-35" src="https://github.com/user-attachments/assets/3dcc357e-c2cd-4d95-b0ca-9861ebb11ee8" />
 
-Place your screenshots into `docs/screenshots/` and reference them in this README under the **Screenshots** section.
+<img width="1459" height="562" alt="Screenshot from 2026-05-21 20-47-06" src="https://github.com/user-attachments/assets/3f0e9bea-ef34-42ea-aa2d-24354b3f5190" />
+
+
 
 ---
 
