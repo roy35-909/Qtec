@@ -289,19 +289,22 @@ pytest tests/
 
 ### Grafana Dashboard — Live metrics
 
-> *(Insert screenshot of full Grafana dashboard showing all 4 panels)*
+<img width="1808" height="994" alt="Screenshot from 2026-05-21 16-23-16" src="https://github.com/user-attachments/assets/4813137d-7b39-488f-a834-02f907f4594e" />
+
 
 ---
 
 ### Request Rate Panel — Under load
 
-> *(Insert screenshot of request rate panel during `hey` load test)*
+> <img width="705" height="299" alt="Screenshot from 2026-05-21 16-38-11" src="https://github.com/user-attachments/assets/520202d6-70e5-4f4b-b09e-477523978f69" />
+
 
 ---
 
 ### Containers Up Panel — All 3 healthy
 
-> *(Insert screenshot showing app1, app2, app3 all showing value 1)*
+> <img width="705" height="299" alt="Screenshot from 2026-05-21 16-39-09" src="https://github.com/user-attachments/assets/34cf0c7b-7822-4c89-9ef9-e5ffe1a37d9f" />
+
 
 ---
 
@@ -313,19 +316,19 @@ pytest tests/
 
 ### Error Rate During Rolling Deploy
 
-> *(Insert screenshot showing error rate stays at 0 while deployment runs — this demonstrates zero-downtime)*
+>
 
 ---
 
 ### GitHub Actions — Successful pipeline run
 
-> *(Insert screenshot of green CI/CD pipeline in GitHub Actions)*
+> 
 
 ---
 
 ### Prometheus Targets — All UP
 
-> *(Insert screenshot of http://localhost:9090/targets showing all 3 app instances as UP)*
+> 
 
 ---
 
