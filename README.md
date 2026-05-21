@@ -145,30 +145,71 @@ All traffic goes through port 80. The app containers are not exposed directly.
 ---
 
 ## CI/CD Pipeline
+The CI/CD workflow is defined in [.github/workflows/deploy.yml](.github/workflows/deploy.yml#L1-L200) and runs on every push to the `main` branch.
 
-The pipeline lives in `.github/workflows/deploy.yml` and runs on every push to `main`.
+**Overview**
+- **Runner actions:** The workflow uses `actions/checkout@v4` (checkout source on the runner) and `actions/setup-python@v5` for the test step.
+- **Image lifecycle:** The runner builds a Docker image from `app/`, tags it with the commit SHA, and pushes it to the configured Docker registry.
+- **Deployment:** The final step SSHs into the server and performs a rolling update by pulling the pushed image and restarting containers one at a time.
 
-**Stages:**
+**Stages (detailed)**
+- **Test**: runs on `ubuntu-latest` and executes:
+  - `actions/checkout@v4`
+  - `actions/setup-python@v5` (Python 3.12)
+  - `pip install -r app/requirements.txt`
+  - `pytest tests/`
+- **Build**: builds the Docker image inside the `app/` folder and tags it as `myapp:${{ github.sha }}`.
+- **Push**: logs into the Docker registry using `secrets.DOCKER_USERNAME` and `secrets.DOCKER_PASSWORD`, tags the image for the registry, and pushes it.
+- **Deploy**: connects via SSH (using `appleboy/ssh-action@v1`) to the server and runs `docker compose pull` followed by rolling `docker compose up -d --no-deps <service>` commands to achieve zero-downtime updates.
 
-1. **Test** — installs dependencies, runs `pytest`
-2. **Build** — builds the Docker image tagged with the commit SHA
-3. **Push** — pushes to Docker Hub (credentials stored as GitHub secrets)
-4. **Deploy** — SSHs into the server and runs a rolling update
+**Important files**
+- Workflow: [.github/workflows/deploy.yml](.github/workflows/deploy.yml#L1-L200)
+- Compose: [docker-compose.yml](docker-compose.yml#L1-L200)
 
+**Secrets required**
+- `DOCKER_USERNAME` — Docker registry username
+- `DOCKER_PASSWORD` — Docker registry password (used with `docker login`)
+- `SERVER_HOST` — target server IP/hostname for SSH deploy
+- `SERVER_USER` — SSH user
+- `SSH_PRIVATE_KEY` — private key used by the `appleboy/ssh-action` to authenticate
+
+Keep secrets in the repository's Settings → Secrets and ensure they are scoped to the repository.
+
+**How deployment works (notes for operators)**
+- The workflow pushes the image to the registry; the remote host must have the Compose YAML(s) that reference the published image (or use the `IMAGE_TAG` environment variable in those compose files).
+- The deploy step does **not** require the server to have a git checkout. Instead it runs `docker compose pull` and `docker compose up -d --no-deps` for a rolling update.
+
+**If you prefer to sync source files instead**
+You can copy the checked-out repository from the runner to the server instead of relying on the registry. Example using `appleboy/scp-action`:
+
+```yaml
+- name: Copy files to server
+  uses: appleboy/scp-action@v0.1.3
+  with:
+    host: ${{ secrets.SERVER_HOST }}
+    username: ${{ secrets.SERVER_USER }}
+    key: ${{ secrets.SSH_PRIVATE_KEY }}
+    source: "./"
+    target: "/opt/myapp"
 ```
-push to main
-    │
-    ├── run tests
-    │       └── fail? → pipeline stops, nothing deploys
-    │
-    ├── build Docker image (tagged with git SHA)
-    │
-    ├── push to Docker Hub
-    │
-    └── SSH into server → rolling update (one container at a time)
-```
 
-No credentials are hardcoded. Docker Hub username/password, server host, and SSH key are all stored as GitHub Actions secrets.
+After copying, you can SSH in and run `docker compose up -d --build` on the server to build from the copied source.
+
+**Security & best practices**
+- Do not store private keys or passwords in the repository. Use GitHub Actions secrets.
+- Limit the scope of the SSH user on the server (use a deploy-specific user with minimal privileges).
+- Prefer deploying from pre-built, signed images for reproducibility and faster deploys.
+
+**Quick troubleshooting**
+- If the deploy fails to pull the image, verify the image tag and registry permissions.
+- Check `docker compose ps` and `docker compose logs` on the server for container-level failures.
+
+**Screenshots (placeholders)**
+- Add a pipeline run screenshot here: `docs/screenshots/actions-run.png`
+- Add Grafana panels under `docs/screenshots/grafana-*.png`
+- Add an example of the rolling deploy logs: `docs/screenshots/deploy-logs.png`
+
+Place your screenshots into `docs/screenshots/` and reference them in this README under the **Screenshots** section.
 
 ---
 
