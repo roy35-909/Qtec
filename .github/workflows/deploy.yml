@@ -40,10 +40,8 @@ jobs:
 
             mkdir -p ~/myapp
 
-            eval "$(ssh-agent -s)"
-            ssh-add <(echo "${{ secrets.SSH_PRIVATE_KEY }}")
-
-            if [ ! -d "~/myapp/.git" ]; then
+            if [ ! -d ~/myapp/.git ]; then
+              rm -rf ~/myapp
               git clone git@github.com:roy35-909/Qtec.git ~/myapp
             else
               cd ~/myapp && git pull origin main
