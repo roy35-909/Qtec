@@ -1,0 +1,68 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: cd app
+      - run: pip install -r requirements.txt
+      - run: pytest tests/
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: |
+          cd app
+          docker build -t myapp:${{ github.sha }} .
+
+      - name: Push to registry
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker tag myapp:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
+
+      - name: Deploy with zero downtime (rolling)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+
+            mkdir -p /opt/myapp
+
+            eval "$(ssh-agent -s)"
+            ssh-add <(echo "${{ secrets.SSH_PRIVATE_KEY }}")
+
+            if [ ! -d "/opt/myapp/.git" ]; then
+              git clone https://github.com/roy35-909/Qtec.git /opt/myapp
+            else
+              cd /opt/myapp && git pull origin main
+            fi
+
+            cd /opt/myapp
+
+
+            echo "GRAFANA_PASSWORD=${{ secrets.GRAFANA_PASSWORD }}" > .env
+
+            export IMAGE_TAG=${{ github.sha }}
+
+
+            docker compose pull
+
+
+            docker compose up -d --no-deps app1
+            sleep 5
+            docker compose up -d --no-deps app2
+            sleep 5
+            docker compose up -d --no-deps app3
