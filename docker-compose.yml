@@ -8,19 +8,19 @@ services:
     depends_on: [app1, app2, app3]
 
   app1:
-    build: .
+    build: ./app
     environment:
       - PORT=8000
     restart: unless-stopped
 
   app2:
-    build: .
+    build: ./app
     environment:
       - PORT=8000
     restart: unless-stopped
 
   app3:
-    build: .
+    build: ./app
     environment:
       - PORT=8000
     restart: unless-stopped
@@ -30,7 +30,7 @@ services:
     image: prom/prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports: ["9090:9090"]
+    ports: ["9099:9090"]
 
   grafana:
     image: grafana/grafana
