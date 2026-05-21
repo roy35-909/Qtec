@@ -310,13 +310,14 @@ pytest tests/
 
 ### p95 Latency Panel
 
-> 
+<img width="705" height="299" alt="Screenshot from 2026-05-21 16-39-50" src="https://github.com/user-attachments/assets/925d8fa8-d6b4-40e7-b971-efb76ef76b9f" />
 
 ---
 
 ### Error Rate During Rolling Deploy
 
->
+>  <img width="705" height="299" alt="Screenshot from 2026-05-21 16-44-42" src="https://github.com/user-attachments/assets/90636dc2-e9b2-4206-b900-6bfa8796bc5f" />
+
 
 ---
 
