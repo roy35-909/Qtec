@@ -50,9 +50,11 @@ jobs:
             cd ~/myapp
 
 
-            echo "GRAFANA_PASSWORD=${{ secrets.GRAFANA_PASSWORD }}" > .env
-
-            export IMAGE_TAG=${{ github.sha }}
+              cat > .env << EOF
+            GRAFANA_PASSWORD=${{ secrets.GRAFANA_PASSWORD }}
+            DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
+            IMAGE_TAG=${{ github.sha }}
+            EOF
 
 
             docker compose pull
