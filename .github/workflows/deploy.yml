@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: cd app && pip install -r requirements.txt
-      - run: cd app && pytest tests/
+      - run: cd app && python -m pytest tests/ -v
 
   build-and-deploy:
     needs: test
@@ -38,18 +38,18 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
 
-            mkdir -p /opt/myapp
+            mkdir -p ~/myapp
 
             eval "$(ssh-agent -s)"
             ssh-add <(echo "${{ secrets.SSH_PRIVATE_KEY }}")
 
-            if [ ! -d "/opt/myapp/.git" ]; then
-              git clone https://github.com/roy35-909/Qtec.git /opt/myapp
+            if [ ! -d "~/myapp/.git" ]; then
+              git clone https://github.com/roy35-909/Qtec.git ~/myapp
             else
-              cd /opt/myapp && git pull origin main
+              cd ~/myapp && git pull origin main
             fi
 
-            cd /opt/myapp
+            cd ~/myapp
 
 
             echo "GRAFANA_PASSWORD=${{ secrets.GRAFANA_PASSWORD }}" > .env
