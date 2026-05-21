@@ -11,9 +11,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: cd app
-      - run: pip install -r requirements.txt
-      - run: pytest tests/
+      - run: cd app && pip install -r requirements.txt
+      - run: cd app && pytest tests/
 
   build-and-deploy:
     needs: test
