@@ -42,7 +42,7 @@ jobs:
 
             if [ ! -d ~/myapp/.git ]; then
               rm -rf ~/myapp
-              git clone git@github.com:roy35-909/Qtec.git ~/myapp
+              git clone https://${{ secrets.GH_TOKEN }}@github.com/roy35-909/Qtec.git ~/myapp
             else
               cd ~/myapp && git pull origin main
             fi
