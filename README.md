@@ -268,6 +268,7 @@ kubectl logs -f deploy/qtech-api -n qtech
 ### Github Actions Screenshorts
 
 <img width="1459" height="562" alt="Screenshot from 2026-05-21 20-47-06" src="https://github.com/user-attachments/assets/78d839c7-87c7-42a0-b415-eaa8a97e0076" />
+<img width="1286" height="705" alt="Screenshot from 2026-05-22 13-19-27" src="https://github.com/user-attachments/assets/9f8867f0-474c-4002-b73d-7716708ff285" />
 
 
 ### Grafana Panels
