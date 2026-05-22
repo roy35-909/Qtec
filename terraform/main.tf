@@ -136,3 +136,22 @@ resource "aws_key_pair" "deployer" {
   key_name   = "${var.project_name}-key"
   public_key = file(var.public_key_path)
 }
+
+
+resource "aws_instance" "app" {
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.app.id]
+  key_name               = aws_key_pair.deployer.key_name
+
+
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+  }
+
+  tags = {
+    Name = "${var.project_name}-server"
+  }
+}

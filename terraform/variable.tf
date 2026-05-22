@@ -34,29 +34,26 @@ variable "allowed_ssh_cidr" {
 
 }
 
-variable "repo_url" {
-  description = "Git repository URL for the application source"
+
+variable "gh_token" {
+  description = "GitHub personal access token to clone the repo"
   type        = string
+  sensitive   = true
 }
 
-variable "deploy_branch" {
-  description = "Branch to deploy from"
+variable "github_repo" {
+  description = "GitHub repo in format username/reponame"
   type        = string
-  default     = "main"
-}
-
-variable "docker_username" {
-  description = "Docker Hub username used by docker compose"
-  type        = string
-}
-
-variable "image_tag" {
-  description = "Docker image tag to use for the application"
-  type        = string
-  default     = "latest"
+  default     = "roy35-909/Qtec"
 }
 
 variable "grafana_password" {
-  description = "Grafana admin password used by docker compose"
+  description = "Grafana admin password"
+  type        = string
+  sensitive   = true
+}
+
+variable "docker_username" {
+  description = "Docker Hub username to pull images"
   type        = string
 }

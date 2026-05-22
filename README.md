@@ -1,45 +1,65 @@
-# Production-Style API Deployment with Docker, Nginx, CI/CD & Monitoring
+# Production-Style FastAPI Platform with Docker, Terraform, CI/CD, Monitoring, and Kubernetes
 
-A small but complete production-style system built for a DevOps engineering task. It exposes a REST API behind a reverse proxy, runs across multiple containers, ships with a CI/CD pipeline, and includes live monitoring through Prometheus and Grafana.
+This repository demonstrates a small production-style platform for a FastAPI service. It includes Docker-based containerization, Terraform for AWS infrastructure, GitHub Actions for CI/CD, Prometheus and Grafana for observability, and Kubernetes manifests for orchestration, rolling updates, and horizontal scaling.
 
 ---
 
 ## Table of Contents
 
+- [What We Built](#what-we-built)
 - [System Architecture](#system-architecture)
 - [Tech Stack](#tech-stack)
-- [The API](#the-api)
-- [Containerization](#containerization)
-- [Reverse Proxy & Load Balancing](#reverse-proxy--load-balancing)
+- [API](#api)
+- [Containerization Approach](#containerization-approach)
+- [Terraform Infrastructure](#terraform-infrastructure)
 - [CI/CD Pipeline](#cicd-pipeline)
-- [Monitoring & Logs](#monitoring--logs)
-- [How ~100 req/sec is handled](#how-100-reqsec-is-handled)
+- [Kubernetes Orchestration](#kubernetes-orchestration)
+- [Deployment Process](#deployment-process)
 - [Zero-Downtime Deployment](#zero-downtime-deployment)
+- [Logging and Monitoring](#logging-and-monitoring)
+- [How the System Handles ~100 Requests/sec](#how-the-system-handles-100-requestssec)
 - [Running Locally](#running-locally)
-- [Screenshots](#screenshots)
+- [Project Structure](#project-structure)
 
 ---
 
+## What We Built
+
+- A FastAPI application with `/status`, `/data`, and `/metrics` endpoints.
+- A Dockerized runtime that can run locally, on a provisioned AWS EC2 instance, or in Kubernetes.
+- Terraform infrastructure that provisions the AWS networking and compute layer.
+- A GitHub Actions pipeline that tests, builds, pushes, and deploys the application image.
+- Kubernetes manifests for a rolling-update Deployment, a Service, and a HorizontalPodAutoscaler.
+- Prometheus and Grafana for application metrics, health, and latency monitoring.
+ - Argo CD for GitOps-style continuous delivery and automated cluster synchronization.
+
 ## System Architecture
 
-```
-User
- │
- ▼
-Nginx (port 80)          ← reverse proxy, load balancer
- │
- ├──▶ app1:8000          ← FastAPI container (worker 1)
- ├──▶ app2:8000          ← FastAPI container (worker 2)
- └──▶ app3:8000          ← FastAPI container (worker 3)
-          │
-          ▼
-    Prometheus            ← scrapes /metrics from all 3 containers
-          │
-          ▼
-      Grafana             ← visualizes request rate, latency, error rate, uptime
+The platform has two supported runtime paths:
+
+```text
+Developer push
+  │
+  ▼
+GitHub Actions
+  ├── tests the app
+  ├── builds and pushes the Docker image
+  └── deploys to AWS or updates Kubernetes
+
+AWS path:
+User -> Nginx on EC2 -> app1/app2/app3 containers -> FastAPI
+                         │
+                         ├-> /metrics -> Prometheus -> Grafana
+                         └-> /status, /data -> application traffic
+
+Kubernetes path:
+User -> Service -> Deployment pods -> FastAPI
+                  │
+                  ├-> readiness/liveness probes
+                  └-> HPA scales replicas on CPU usage
 ```
 
-GitHub Actions handles CI/CD — on every push to `main`, it runs tests, builds the Docker image, and deploys to the server using a rolling update strategy.
+Terraform provisions the AWS host used by the Compose-based deployment. Kubernetes manifests provide an alternative orchestrated runtime with native rolling updates and autoscaling.
 
 ---
 
@@ -51,230 +71,164 @@ GitHub Actions handles CI/CD — on every push to `main`, it runs tests, builds 
 | Containerization | Docker, Docker Compose |
 | Reverse proxy | Nginx |
 | CI/CD | GitHub Actions |
+| Infrastructure as Code | Terraform |
+| Orchestration | Kubernetes |
 | Metrics | Prometheus, prometheus-fastapi-instrumentator |
 | Dashboards | Grafana |
 | Load testing | hey |
 
----
+## API
 
-## The API
+The FastAPI app exposes three key endpoints:
 
-Two endpoints:
+- `GET /status` returns a health response and timestamp.
+- `POST /data` accepts a JSON payload and echoes the key back.
+- `GET /metrics` is exposed by `prometheus-fastapi-instrumentator` for scraping.
 
-### `GET /status`
-
-Returns a health check with current server time.
+Example requests:
 
 ```bash
 curl http://localhost/status
-```
 
-```json
-{
-  "status": "ok",
-  "timestamp": 1716291600.123
-}
-```
-
-### `POST /data`
-
-Accepts a JSON payload and echoes it back.
-
-```bash
 curl -X POST http://localhost/data \
   -H "Content-Type: application/json" \
-  -d '{"key": "environment", "value": "production"}'
+  -d '{"key":"environment","value":"production"}'
 ```
 
-```json
-{
-  "received": true,
-  "key": "environment"
-}
-```
+## Containerization Approach
 
-Both endpoints are instrumented — every request is tracked automatically by Prometheus via the `/metrics` endpoint on each container.
+The application is packaged in [app/Dockerfile](app/Dockerfile) with a production-friendly layout:
 
----
+- Based on `python:3.12-slim` to keep the image small.
+- Runs as a non-root user (`appuser`).
+- Installs dependencies from `requirements.txt` with `pip`.
+- Starts Uvicorn on port `8000` with 4 worker processes.
+- Uses the `PORT` environment variable so the runtime can be configured without editing code.
 
-## Containerization
+The Compose stack in [docker-compose.yml](docker-compose.yml) runs three application containers (`app1`, `app2`, `app3`) behind Nginx, plus Prometheus and Grafana for monitoring.
 
-The app is packaged with a production-style Dockerfile:
+## Terraform Infrastructure
 
-- Based on `python:3.12-slim` to keep the image small
-- Runs as a **non-root user** (`appuser`) — no root privileges inside the container
-- Uvicorn starts with **4 worker processes** per container
-- All configuration (port, env) comes from environment variables — no hardcoded values
-- Dependencies installed from `requirements.txt` with `--no-cache-dir` to avoid bloating the layer
+The [terraform/](terraform) folder provisions the AWS runtime used by the deployment workflow.
 
-```bash
-# Build and run manually
-docker build -t fastapi-app .
-docker run -p 8000:8000 --env PORT=8000 fastapi-app
-```
+It creates:
 
-Or use Compose to bring up the full stack:
+- A VPC with DNS support.
+- One public subnet.
+- An internet gateway and route table.
+- A security group for SSH, HTTP, Nginx, Grafana, and Prometheus.
+- An EC2 instance with a 20 GB `gp3` root disk.
+- A key pair for SSH access.
 
-```bash
-docker compose up -d
-```
+Key Terraform files:
 
----
+- [terraform/main.tf](terraform/main.tf)
+- [terraform/variable.tf](terraform/variable.tf)
+- [terraform/outputs.tf](terraform/outputs.tf)
 
-## Reverse Proxy & Load Balancing
+Open ports in the security group:
 
-Nginx sits in front of all three app containers. It uses the `least_conn` strategy — new requests go to whichever container currently has the fewest active connections. This works better than round-robin when some requests take longer than others.
+- `22` for SSH, restricted by `allowed_ssh_cidr`.
+- `80` for HTTP traffic.
+- `8079` for the Nginx proxy used by the Compose deployment.
+- `3000` for Grafana.
+- `9099` for Prometheus.
 
-```nginx
-upstream app_backend {
-    least_conn;
-    server app1:8000;
-    server app2:8000;
-    server app3:8000;
-}
-```
-
-Nginx also handles:
-
-- Request logging (`access.log`)
-- Proxy headers forwarding (`X-Real-IP`, `Host`)
-- Connection timeouts (5s connect, 30s read)
-
-All traffic goes through port 80. The app containers are not exposed directly.
-
----
+Terraform outputs the server IP, DNS name, app URL, Grafana URL, and Prometheus URL after `apply`.
 
 ## CI/CD Pipeline
-The CI/CD workflow is defined in [.github/workflows/deploy.yml](.github/workflows/deploy.yml#L1-L200) and runs on every push to the `main` branch.
 
-**Overview**
-- **Runner actions:** The workflow uses `actions/checkout@v4` (checkout source on the runner) and `actions/setup-python@v5` for the test step.
-- **Image lifecycle:** The runner builds a Docker image from `app/`, tags it with the commit SHA, and pushes it to the configured Docker registry.
-- **Deployment:** The final step SSHs into the server and performs a rolling update by pulling the pushed image and restarting containers one at a time.
+The workflow in [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs on pushes to `main`.
 
-**Stages (detailed)**
-- **Test**: runs on `ubuntu-latest` and executes:
-  - `actions/checkout@v4`
-  - `actions/setup-python@v5` (Python 3.12)
-  - `pip install -r app/requirements.txt`
-  - `pytest tests/`
-- **Build**: builds the Docker image inside the `app/` folder and tags it as `myapp:${{ github.sha }}`.
-- **Push**: logs into the Docker registry using `secrets.DOCKER_USERNAME` and `secrets.DOCKER_PASSWORD`, tags the image for the registry, and pushes it.
-- **Deploy**: connects via SSH (using `appleboy/ssh-action@v1`) to the server and runs `docker compose pull` followed by rolling `docker compose up -d --no-deps <service>` commands to achieve zero-downtime updates.
+Flow:
 
-**Important files**
-- Workflow: [.github/workflows/deploy.yml](.github/workflows/deploy.yml#L1-L200)
-- Compose: [docker-compose.yml](docker-compose.yml#L1-L200)
+1. Test job checks out the code, installs Python 3.12 dependencies, and runs `pytest`.
+2. Build job builds the Docker image from `app/`.
+3. Push job logs in to Docker Hub and pushes the image tagged with the commit SHA.
+4. Deploy job SSHs into the server, clones or updates the repo, writes the runtime `.env`, and updates the running containers one by one.
 
-**Secrets required**
-- `DOCKER_USERNAME` — Docker registry username
-- `DOCKER_PASSWORD` — Docker registry password (used with `docker login`)
-- `SERVER_HOST` — target server IP/hostname for SSH deploy
-- `SERVER_USER` — SSH user
-- `SSH_PRIVATE_KEY` — private key used by the `appleboy/ssh-action` to authenticate
+Required secrets:
 
-Keep secrets in the repository's Settings → Secrets and ensure they are scoped to the repository.
+- `DOCKER_USERNAME`
+- `DOCKER_PASSWORD`
+- `SERVER_HOST`
+- `SERVER_USER`
+- `SSH_PRIVATE_KEY`
+- `GH_TOKEN`
+- `GRAFANA_PASSWORD`
 
-**How deployment works (notes for operators)**
-- The workflow pushes the image to the registry; the remote host must have the Compose YAML(s) that reference the published image (or use the `IMAGE_TAG` environment variable in those compose files).
-- The deploy step does **not** require the server to have a git checkout. Instead it runs `docker compose pull` and `docker compose up -d --no-deps` for a rolling update.
+## Kubernetes Orchestration
 
-**If you prefer to sync source files instead**
-You can copy the checked-out repository from the runner to the server instead of relying on the registry. Example using `appleboy/scp-action`:
+The [k8s/](k8s) folder contains Kubernetes manifests for the application:
 
-```yaml
-- name: Copy files to server
-  uses: appleboy/scp-action@v0.1.3
-  with:
-    host: ${{ secrets.SERVER_HOST }}
-    username: ${{ secrets.SERVER_USER }}
-    key: ${{ secrets.SSH_PRIVATE_KEY }}
-    source: "./"
-    target: "/opt/myapp"
-```
+- [k8s/namespace.yaml](k8s/namespace.yaml)
+- [k8s/deployment.yaml](k8s/deployment.yaml)
+- [k8s/service.yaml](k8s/service.yaml)
+- [k8s/hpa.yaml](k8s/hpa.yaml)
+- [k8s/kustomization.yaml](k8s/kustomization.yaml)
 
-After copying, you can SSH in and run `docker compose up -d --build` on the server to build from the copied source.
+The Deployment is configured for rolling updates with `maxUnavailable: 0` and `maxSurge: 1`. It also includes readiness and liveness probes against `/status` so traffic only reaches healthy pods.
 
-**Security & best practices**
-- Do not store private keys or passwords in the repository. Use GitHub Actions secrets.
-- Limit the scope of the SSH user on the server (use a deploy-specific user with minimal privileges).
-- Prefer deploying from pre-built, signed images for reproducibility and faster deploys.
+The Service exposes the app with a `LoadBalancer`, and the HorizontalPodAutoscaler scales from 3 to 10 replicas based on CPU utilization.
 
-**Quick troubleshooting**
-- If the deploy fails to pull the image, verify the image tag and registry permissions.
-- Check `docker compose ps` and `docker compose logs` on the server for container-level failures.
-
-**Screenshots (placeholders)**
-<img width="825" height="458" alt="Screenshot from 2026-05-21 20-49-35" src="https://github.com/user-attachments/assets/3dcc357e-c2cd-4d95-b0ca-9861ebb11ee8" />
-
-<img width="1459" height="562" alt="Screenshot from 2026-05-21 20-47-06" src="https://github.com/user-attachments/assets/3f0e9bea-ef34-42ea-aa2d-24354b3f5190" />
-
-
-
----
-
-## Monitoring & Logs
-
-### Prometheus
-
-Prometheus scrapes `/metrics` from all three app containers every 15 seconds. The FastAPI app exposes this endpoint automatically via `prometheus-fastapi-instrumentator`.
-
-Metrics collected per container:
-- `http_requests_total` — total request count by handler, method, status
-- `http_request_duration_seconds` — latency histogram
-- `up` — whether the container is reachable
-
-### Grafana
-
-Grafana connects to Prometheus and visualizes the data across four panels:
-
-| Panel | Query | What it shows |
-|---|---|---|
-| Request rate | `rate(http_requests_total{handler=~"/status\|/data"}[1m])` | Live req/sec per container |
-| p95 Latency | `histogram_quantile(0.95, ...)` | 95th percentile response time |
-| Error rate | `rate(http_requests_total{status=~"4xx\|5xx"}[1m])` | Failed requests over time |
-| Containers up | `up{job="fastapi"}` | 1 = healthy, 0 = down |
-
-> **Screenshots of the Grafana dashboard below.**
-
-### Container logs
-
-Every request is logged to stdout by Uvicorn and captured by Docker:
+Apply the manifests with:
 
 ```bash
-# Follow logs from all containers
-docker compose logs -f
-
-# Follow a specific container
-docker compose logs -f app1
+kubectl apply -k k8s
 ```
 
----
+### Argo CD (GitOps)
 
-## How ~100 req/sec is handled
+You can use Argo CD as a GitOps entry point to keep the `k8s/` folder in sync with your cluster.
 
-The system is set up to handle around 100–150 req/sec without any changes.
-
-Three app containers × 4 Uvicorn workers each = **12 worker processes** running in parallel. Each worker handles one request at a time, and FastAPI itself is async — I/O-bound work doesn't block the event loop.
-
-At ~10–12 req/sec per worker, 12 workers gives roughly 120–144 req/sec of comfortable headroom before latency starts climbing.
-
-Nginx distributes load across containers using `least_conn`, which keeps the work balanced even when some requests take longer.
-
-If the system needed to go higher — say 500–1000 req/sec — the path is straightforward: add more containers to the Compose file (or scale the service in Kubernetes), and Nginx picks them up automatically. No code changes needed.
-
-To verify this during testing:
+1. Install Argo CD (single-cluster):
 
 ```bash
-# Send 1000 requests at 100 concurrent connections
-hey -n 1000 -c 100 http://localhost/status
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 ```
 
----
+2. Expose the Argo CD server locally (port-forward) or configure an ingress/LoadBalancer:
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# then open http://localhost:8080
+```
+
+3. Apply the Argo CD Application manifest included in this repo to point Argo CD at the `k8s/` directory:
+
+```bash
+kubectl apply -f k8s/argocd/application.yaml -n argocd
+```
+
+Argo CD will then synchronize the `k8s/` directory in this repository into the `qtech` namespace. The Application uses `automated` sync with `prune` and `selfHeal` enabled so changes in Git are applied automatically.
+
+Notes:
+- The Application `repoURL` points to `https://github.com/roy35-909/Qtec.git` — change this to your fork if needed.
+- For production clusters, secure the Argo CD server (TLS, ingress) and restrict who can create Applications.
+
+
+## Deployment Process
+
+There are two practical deployment paths in this repository:
+
+### AWS host + Docker Compose
+
+1. Terraform provisions the EC2 host and its networking.
+2. GitHub Actions builds and pushes the Docker image.
+3. The deploy job SSHs into the host.
+4. The host pulls the new image and updates `app1`, `app2`, and `app3` sequentially.
+
+### Kubernetes
+
+1. Push the image to the registry.
+2. Update the image tag in the Deployment manifest if needed.
+3. Apply the manifest with `kubectl apply -k k8s`.
+4. Kubernetes performs a rolling update automatically.
 
 ## Zero-Downtime Deployment
 
-The deployment script updates one container at a time with a short pause between each:
+The Docker Compose path updates one app container at a time:
 
 ```bash
 docker compose up -d --no-deps app1
@@ -284,119 +238,114 @@ sleep 5
 docker compose up -d --no-deps app3
 ```
 
-While `app1` is restarting, Nginx is still routing traffic to `app2` and `app3`. Users never hit a container mid-restart. By the time `app3` is updated, `app1` and `app2` are already serving the new version.
+Nginx keeps routing traffic to the remaining healthy containers while one container restarts. That means there is always capacity to serve requests.
 
-The error rate panel in Grafana stays at zero throughout the entire deployment — which is the clearest way to verify it's actually working.
+The Kubernetes path achieves the same outcome with the Deployment rolling-update strategy and readiness probes. New pods must become healthy before they receive traffic, so old pods stay in service until the replacement pods are ready.
 
----
+## Logging and Monitoring
 
-## Running Locally
+The app logs to stdout through Uvicorn, so Docker and Kubernetes can capture the logs natively.
 
-**Prerequisites:** Docker, Docker Compose
+Prometheus scrapes the FastAPI `/metrics` endpoint every 15 seconds in the Compose-based monitoring stack. Grafana then visualizes request rate, latency, errors, and container health.
 
-```bash
-# 1. Clone the repo
-git clone https://github.com/your-username/your-repo.git
-cd your-repo
-
-# 2. Copy the example env file and fill in values
-cp .env.example .env
-
-# 3. Start everything
-docker compose up -d
-
-# 4. Verify containers are up
-docker compose ps
-```
-
-| Service | URL |
-|---|---|
-| API (via Nginx) | http://localhost |
-| Grafana | http://localhost:3000 |
-| Prometheus | http://localhost:9090 |
-
-Default Grafana login: `admin` / value of `GRAFANA_PASSWORD` in your `.env`
-
-To run the test suite locally:
+Useful log commands:
 
 ```bash
-pip install -r requirements.txt
-pytest tests/
+docker compose logs -f
+docker compose logs -f app1
+kubectl logs -f deploy/qtech-api -n qtech
 ```
-
----
 
 ## Screenshots
 
-### Grafana Dashboard — Live metrics
+### Grafana Overview
+
+<img width="825" height="458" alt="Screenshot from 2026-05-21 20-49-35" src="https://github.com/user-attachments/assets/3dcc357e-c2cd-4d95-b0ca-9861ebb11ee8" />
+
+<img width="1459" height="562" alt="Screenshot from 2026-05-21 20-47-06" src="https://github.com/user-attachments/assets/3f0e9bea-ef34-42ea-aa2d-24354b3f5190" />
+
+### Grafana Panels
+
+#### Live Metrics
 
 <img width="1808" height="994" alt="Screenshot from 2026-05-21 16-23-16" src="https://github.com/user-attachments/assets/4813137d-7b39-488f-a834-02f907f4594e" />
 
-
----
-
-### Request Rate Panel — Under load
+#### Request Rate (under load)
 
 > <img width="705" height="299" alt="Screenshot from 2026-05-21 16-38-11" src="https://github.com/user-attachments/assets/520202d6-70e5-4f4b-b09e-477523978f69" />
 
-
----
-
-### Containers Up Panel — All 3 healthy
+#### Containers Up — all healthy
 
 > <img width="705" height="299" alt="Screenshot from 2026-05-21 16-39-09" src="https://github.com/user-attachments/assets/34cf0c7b-7822-4c89-9ef9-e5ffe1a37d9f" />
 
-
----
-
-### p95 Latency Panel
+#### p95 Latency
 
 <img width="705" height="299" alt="Screenshot from 2026-05-21 16-39-50" src="https://github.com/user-attachments/assets/925d8fa8-d6b4-40e7-b971-efb76ef76b9f" />
 
----
-
-### Error Rate During Rolling Deploy
+#### Error Rate During Rolling Deploy
 
 >  <img width="705" height="299" alt="Screenshot from 2026-05-21 16-44-42" src="https://github.com/user-attachments/assets/90636dc2-e9b2-4206-b900-6bfa8796bc5f" />
 
 
----
+## How the System Handles ~100 Requests/sec
 
-### GitHub Actions — Successful pipeline run
+The Compose deployment is sized for roughly 100 to 150 requests per second under normal conditions.
 
-> 
+Why it works:
 
----
+- Three app containers run in parallel.
+- Each container starts Uvicorn with 4 workers.
+- That gives 12 workers total.
+- Nginx uses `least_conn`, so requests spread across the least busy container.
+- The app is lightweight and mostly I/O bound, so it stays efficient under moderate concurrency.
 
-### Prometheus Targets — All UP
+In Kubernetes, the same app can scale beyond that baseline because the HPA can add more pods when CPU rises.
 
-> 
+For a quick load test:
 
----
+```bash
+hey -n 1000 -c 100 http://localhost/status
+```
+
+## Running Locally
+
+Prerequisites: Docker and Docker Compose.
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+If you want to test the Kubernetes manifests locally on a cluster:
+
+```bash
+kubectl apply -k k8s
+```
 
 ## Project Structure
 
-```
+```text
 ├── app/
-│   ├── main.py                  # FastAPI application
+│   ├── Dockerfile
+│   ├── main.py
+│   ├── requirements.txt
 │   └── tests/
-│       └── test_api.py          # basic endpoint tests
-├── grafana/
-│   ├── provisioning/
-│   │   ├── datasources/
-│   │   │   └── prometheus.yml
-│   │   └── dashboards/
-│   │       └── dashboards.yml
-│   └── dashboards/
-│       └── fastapi.json
+├── k8s/
+│   ├── deployment.yaml
+│   ├── hpa.yaml
+│   ├── kustomization.yaml
+│   ├── namespace.yaml
+│   └── service.yaml
+├── terraform/
+│   ├── main.tf
+│   ├── outputs.tf
+│   ├── variable.tf
+│   └── terraform.tfvars
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml           # CI/CD pipeline
-├── Dockerfile
+│       └── deploy.yml
 ├── docker-compose.yml
 ├── nginx.conf
 ├── prometheus.yml
-├── requirements.txt
-├── .env.example
 └── README.md
 ```
