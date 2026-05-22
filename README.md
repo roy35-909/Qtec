@@ -258,7 +258,7 @@ kubectl logs -f deploy/qtech-api -n qtech
 
 ## Screenshots
 
-### Grafana Overview
+### Github Secrets Setup
 
 <img width="825" height="458" alt="Screenshot from 2026-05-21 20-49-35" src="https://github.com/user-attachments/assets/3dcc357e-c2cd-4d95-b0ca-9861ebb11ee8" />
 
