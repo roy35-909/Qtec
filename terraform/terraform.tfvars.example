@@ -1,0 +1,9 @@
+aws_region       = "ap-southeast-1"
+project_name     = "qtec-devops"
+instance_type    = "t2.micro"
+allowed_ssh_cidr = "0.0.0.0/0"
+
+github_repo      = "roy35-909/Qtec"
+gh_token         = "ghp_xxxxxxxxxxxxxxxxxxxxxxx"
+grafana_password = "admin"
+docker_username  = "dockerxxx"
